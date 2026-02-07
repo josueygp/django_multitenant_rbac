@@ -1,0 +1,35 @@
+{% load rbac_tags %}
+<h1>Roles in {{ request.tenant.name }}</h1>
+
+<a href="{% url 'tenant_dashboard' request.tenant.id %}">Back to Dashboard</a>
+<br><br>
+
+{% has_tenant_perm 'sandbox.add_role' as can_add_role %}
+{% if can_add_role %}
+<a href="{% url 'role_create' request.tenant.id %}" style="background: green; color: white; padding: 5px;">
+    + Create New Role
+</a>
+{% endif %}
+
+<ul>
+    {% for rol in roles %}
+    <li>
+        <a href="{% url 'role_detail' request.tenant.id rol.id %}">
+            <strong>{{ rol.name }}</strong>
+        </a>: {{ rol.description }}
+        <br>
+        <small>Permissions: {{ rol.permissions.count }}</small>
+
+        {% if rol.is_protected %}
+        🔒 <span style="color:gray; font-size: 0.8em;">(Protected)</span>
+        {% else %}
+        {% has_tenant_perm 'sandbox.delete_role' as can_delete %}
+        {% if can_delete %}
+        <a href="{% url 'role_delete' request.tenant.id rol.id %}" style="color: red; margin-left: 10px;">[Delete]</a>
+        {% endif %}
+        {% endif %}
+    </li>
+    {% empty %}
+    <li>No roles defined.</li>
+    {% endfor %}
+</ul>

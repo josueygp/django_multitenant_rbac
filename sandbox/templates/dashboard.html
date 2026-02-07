@@ -1,0 +1,68 @@
+{% load rbac_tags %}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dashboard {{ tenant.name }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .badge {
+            padding: 5px 10px;
+            background: #eee;
+            border-radius: 4px;
+        }
+
+        .btn-danger {
+            background: red;
+            color: white;
+            padding: 10px;
+            text-decoration: none;
+        }
+
+        .btn-success {
+            background: green;
+            color: white;
+            padding: 10px;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Welcome to {{ tenant.name }}</h1>
+    <p>User: <strong>{{ request.user.username }}</strong> <a href="{% url 'logout' %}">(Logout)</a></p>
+
+    <hr>
+
+    <h3>Available Actions:</h3>
+
+    <a href="{% url 'member_list' request.tenant.id %}" class="badge"
+        style="text-decoration: none; color: black; border: 1px solid #ccc;">
+        View User List
+    </a>
+
+    <a href="{% url 'role_list' request.tenant.id %}" class="badge"
+        style="text-decoration: none; color: black; border: 1px solid #ccc; margin-left: 10px;">
+        Manage Roles
+    </a>
+
+    <br><br>
+
+    {% has_tenant_perm 'auth.add_user' as can_add_user %}
+
+    {% if can_add_user %}
+    <a href="#" class="btn-success">CREATE NEW USER (Admins Only)</a>
+    {% else %}
+    <span style="color: grey; border: 1px dashed grey; padding: 5px;">
+        (You do not have permissions to create users)
+    </span>
+    {% endif %}
+
+</body>
+
+</html>

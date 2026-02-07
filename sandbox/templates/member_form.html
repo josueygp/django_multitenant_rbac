@@ -1,0 +1,14 @@
+{% load rbac_tags %}
+<h1>Assign Role</h1>
+
+<h3>User: {{ object.user.username }}</h3>
+<p>Organization: {{ request.tenant.name }}</p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" style="background: blue; color: white; padding: 10px;">Save Changes</button>
+</form>
+
+<br>
+<a href="{% url 'member_list' request.tenant.id %}">Cancel and Return</a>

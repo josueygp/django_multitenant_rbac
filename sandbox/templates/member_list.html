@@ -1,0 +1,44 @@
+{% load rbac_tags %}
+<h1>Users in {{ request.tenant.name }}</h1>
+
+<a href="{% url 'tenant_dashboard' request.tenant.id %}">Back to Dashboard</a> | <a
+    href="{% url 'role_list' request.tenant.id %}">View Roles</a>
+<br><br>
+
+<table border="1" cellpadding="5" cellspacing="0" style="width: 100%;">
+    <thead>
+        <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Current Role</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for member in members %}
+        <tr>
+            <td>{{ member.user.username }}</td>
+            <td>{{ member.user.email }}</td>
+            <td>
+                {% if member.role %}
+                {{ member.role.name }}
+                {% else %}
+                <span style="color:red;">No Role</span>
+                {% endif %}
+            </td>
+            <td>
+                {% has_tenant_perm 'sandbox.change_role' as can_edit_role %}
+                {% if can_edit_role %}
+                <a href="{% url 'member_update' request.tenant.id member.id %}">Edit Role</a>
+                {% else %}
+                <span style="color:gray;">(Read Only)</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="4">No members in this organization.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

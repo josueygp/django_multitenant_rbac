@@ -1,0 +1,34 @@
+{% load rbac_tags %}
+<h1>Role Details: {{ role.name }}</h1>
+
+<p><strong>Description:</strong> {{ role.description }}</p>
+<p><strong>Organization:</strong> {{ role.organization }}</p>
+
+<h3>Permissions ({{ role.permissions.count }})</h3>
+<ul>
+    {% for perm in role.permissions.all %}
+    <li>{{ perm.name }} ({{ perm.codename }})</li>
+    {% empty %}
+    <li>No permissions assigned.</li>
+    {% endfor %}
+</ul>
+
+<h3>Assigned Members ({{ members.count }})</h3>
+<ul>
+    {% for member in members %}
+    <li>
+        {{ member.user.username }} ({{ member.user.email }})
+        {% has_tenant_perm 'sandbox.change_role' as can_edit_role %}
+        {% if can_edit_role %}
+        <a href="{% url 'member_update' request.tenant.id member.id %}" style="font-size: 0.8em; color: blue;">[Change
+            Role]</a>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li>No users assigned to this role.</li>
+    {% endfor %}
+</ul>
+
+<br>
+<a href="{% url 'role_list' request.tenant.id %}">Back to Roles</a> |
+<a href="{% url 'member_list' request.tenant.id %}">Manage Users</a>

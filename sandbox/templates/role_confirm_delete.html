@@ -1,0 +1,52 @@
+{% load rbac_tags %}
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Delete Role</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .alert-box {
+            border: 2px solid red;
+            background: #ffe6e6;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .btn-danger {
+            background: red;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            color: #333;
+            margin-right: 15px;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Delete Role: {{ object.name }}</h1>
+
+    <div class="alert-box">
+        <p>Are you sure you want to delete the role <strong>{{ object.name }}</strong>?</p>
+        <p><em>Warning: This action is irreversible.</em></p>
+
+        <form method="post">
+            {% csrf_token %}
+            <a href="{% url 'role_list' request.tenant.id %}" class="btn-cancel">Cancel</a>
+            <button type="submit" class="btn-danger">Confirm Deletion</button>
+        </form>
+    </div>
+</body>
+
+</html>
