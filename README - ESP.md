@@ -179,6 +179,11 @@ Para verificar la seguridad:
 5.  Intenta entrar como **Charlie** (usuario de otra empresa) a `/1/roles/`. Recibirás un `403`.
 
 ---
+## 📚 References
+
+- [django-multitenant](https://github.com/citusdata/django-multitenant)
+
+---
 
 ## 📄 Licencia
 
