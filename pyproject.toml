@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/josueygp/django-tenant-rbac"
-"Bug Tracker" = "https://github.com/josueygp/django-tenant-rbac/issues"
+"Homepage" = "https://github.com/josueygp/django_multitenant_rbac"
+"Bug Tracker" = "https://github.com/josueygp/django_multitenant_rbac/issues"
 
 [tool.setuptools.packages.find]
 include = ["tenant_rbac*"]
