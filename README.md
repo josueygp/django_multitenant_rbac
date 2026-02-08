@@ -37,6 +37,11 @@ This project includes a reusable library (`tenant_rbac`) and a demo project (`sa
 
 ## ⚡ Quick Start Guide
 
+> [!WARNING]
+> **Production Warning:**
+> The project uses `SimpleTenantMiddleware` in `sandbox/middleware.py`. This middleware is **FOR TESTING ONLY** (it takes the ID from the URL).
+> For production, you must implement a secure middleware that resolves the tenant based on subdomains (e.g., `company.saas.com`) or secure session tokens.
+
 ### 1. Installation
 
 ```bash
@@ -49,7 +54,8 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install django django-multitenant
+pip install -r requirements.txt
+# Or manually: pip install django django-multitenant django-multitenant-rbac
 ```
 
 ### 2. Database Configuration
@@ -87,6 +93,12 @@ python manage.py runserver
 ## 🛠️ Using the `tenant_rbac` Library
 
 If you wish to implement this logic in your own project, follow these patterns:
+
+### INSTALLATION
+
+```bash
+pip install django-multitenant-rbac
+```
 
 ### 1. Model Definition (`models.py`)
 
@@ -146,25 +158,67 @@ class MemberForm(TenantModelForm):
         fields = ['role']
 ```
 
+### 4. Template Tags (HTML Usage)
+
+To control the visibility of elements in your templates based on tenant permissions, use the `has_tenant_perm` tag.
+
+1. Load the tags in your template:
+
+   ```html
+   {% load rbac_tags %}
+   ```
+
+2. Check permissions:
+
+   ```html
+   {% has_tenant_perm 'app.create_invoice' as can_create_invoice %}
+
+   {% if can_create_invoice %}
+     <a href="{% url 'invoice_create' %}">New Invoice</a>
+   {% endif %}
+   ```
+
 ---
 
-## 🔒 Implemented Security Mechanisms
+## 📖 API Reference
 
-### 1. Privilege Escalation Prevention
-A tenant administrator cannot grant permissions that they do not possess.
+| Component | Type | Description |
+| :--- | :--- | :--- |
+| **`TenantRBACMixin`** | Mixin (View) | Verifies that the user has the required permission (`tenant_permission_required`) within the current tenant. |
+| **`TenantGenericViewMixin`** | Mixin (View) | Overrides `get_queryset` to automatically filter by the current tenant. |
+| **`TenantModelForm`** | Form | Filters all `ForeignKey` fields in the form to show only options belonging to the same tenant. |
+| **`RoleFormMixin`** | Form Mixin | **Anti-Escalation:** Limits the options of the `permissions` field so that a user cannot grant permissions they do not have themselves. |
+| **`AbstractTenantRole`** | Model | Base model for Roles. Includes name, description, and M2M relationship with `Permission`. |
+| **`AbstractTenantMember`** | Model | Base model for Members. Links User + Tenant (+ Role in your concrete implementation). |
+| **`has_tenant_perm`** | Template Tag | Allows verifying boolean permissions within HTML templates. |
 
-> **Example:** If Alice does not have the "Delete Invoices" permission, the role creation form will not show that option to assign it to another user.
+---
 
-### 2. Strict Isolation
-All views inherit from `TenantGenericViewMixin`, which overrides `get_queryset`.
+## ⚙️ Under the Hood: How Security Works
 
-> **Result:** It is impossible to access an object `/roles/5/` if that role belongs to another company, even if you guess the ID.
+To build trust in the implementation, here we explain the technical controls:
 
-### 3. Record Protection (`is_protected`)
-The system respects the `is_protected` field in models.
+### 1. Context Injection (Middleware)
+Everything starts in the middleware. Before reaching the view, the system must identify the "Current Tenant".
+*   `request.tenant` is injected into every request.
+*   `django_multitenant.utils.set_current_tenant(tenant)` is called to activate database-level filtering (if using Citus/Postgres schemas) or logical filtering.
 
-*   **Usage:** The "Administrator" role is created with `is_protected=True`.
-*   **Result:** If someone attempts to delete it via Web or API, they will receive a `403 Forbidden` error.
+### 2. View Isolation (`get_queryset`)
+Our generic views (`TenantListView`, etc.) override `get_queryset`.
+*   **Code:** `return qs.filter(tenant_id=request.tenant.id)`
+*   **Effect:** Even if an attacker changes the ID in the URL (`/roles/999/`), the SQL query will force the filter `AND tenant_id = X`. If ID 999 does not belong to tenant X, the database returns empty and Django raises a 404.
+
+### 3. Armored Forms ("Anti-Leak")
+When creating or editing data, the risk is seeing foreign data in "Select Boxes" (Foreign Keys).
+*   `TenantModelForm` iterates over all fields in the form.
+*   Detects if the related model has `tenant_id`.
+*   Automatically applies a filter to the widget's QuerySet: `.filter(tenant_id=request.tenant.id)`.
+
+### 4. Privilege Escalation Prevention
+Prevents a malicious or compromised administrator from creating a hidden "Super User".
+*   When rendering the Role form, `RoleFormMixin` intercepts the `permissions` field.
+*   Calculates the intersection between "All available permissions" and "Permissions the current user HAS".
+*   Only displays that intersection. No one can give what they do not have.
 
 ---
 
@@ -179,11 +233,13 @@ To verify security:
 5.  Try to log in as **Charlie** (user from another company) to `/1/roles/`. You will receive a `403`.
 
 ---
+
 ## 📚 References
 
 - [django-multitenant](https://github.com/citusdata/django-multitenant)
 
 ---
+
 ## 📄 License
 
 This project is open source under the MIT license.

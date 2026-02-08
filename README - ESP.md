@@ -16,6 +16,8 @@ Este proyecto incluye una librería reutilizable (`tenant_rbac`) y un proyecto d
 
 ---
 
+
+
 ## 📂 Estructura del Proyecto
 
 ```text
@@ -35,7 +37,13 @@ Este proyecto incluye una librería reutilizable (`tenant_rbac`) y un proyecto d
 └── manage.py
 ```
 
+
 ## ⚡ Guía de Inicio Rápido
+
+> [!WARNING]
+> **Advertencia de Producción:**
+> El proyecto usa `SimpleTenantMiddleware` en `sandbox/middleware.py`. Este middleware es **SOLO PARA PRUEBAS** (toma el ID de la URL).
+> Para producción, debes implementar un middleware seguro que resuelva el tenant basado en subdominios (ej: `empresa.saas.com`) o tokens de sesión segura.
 
 ### 1. Instalación
 
@@ -49,7 +57,8 @@ python -m venv .venv
 source .venv/bin/activate  # En Windows: .venv\Scripts\activate
 
 # Instalar dependencias
-pip install django django-multitenant
+pip install -r requirements.txt
+# O si es manual: pip install django django-multitenant django-multitenant-rbac
 ```
 
 ### 2. Configuración de Base de Datos
@@ -87,6 +96,12 @@ python manage.py runserver
 ## 🛠️ Uso de la Librería `tenant_rbac`
 
 Si deseas implementar esta lógica en tu propio proyecto, sigue estos patrones:
+
+### INSTALACIÓN
+
+```bash
+pip install django-multitenant-rbac
+```
 
 ### 1. Definición de Modelos (`models.py`)
 
@@ -146,25 +161,67 @@ class MemberForm(TenantModelForm):
         fields = ['role']
 ```
 
+### 4. Template Tags (Uso en HTML)
+
+Para controlar la visibilidad de elementos en tus plantillas según los permisos del tenant, usa el tag `has_tenant_perm`.
+
+1. Carga los tags en tu template:
+
+   ```html
+   {% load rbac_tags %}
+   ```
+
+2. Verifica permisos:
+
+   ```html
+   {% has_tenant_perm 'app.crear_factura' as can_create_invoice %}
+
+   {% if can_create_invoice %}
+     <a href="{% url 'invoice_create' %}">Nueva Factura</a>
+   {% endif %}
+   ```
+
 ---
 
-## 🔒 Mecanismos de Seguridad Implementados
+## 📖 Referencia de la API
 
-### 1. Anti-Escalada de Privilegios
-Un administrador de inquilino no puede otorgar permisos que no posee.
+| Componente | Tipo | Descripción |
+| :--- | :--- | :--- |
+| **`TenantRBACMixin`** | Mixin (View) | Verifica que el usuario tenga el permiso requerido (`tenant_permission_required`) dentro del tenant actual. |
+| **`TenantGenericViewMixin`** | Mixin (View) | Sobrescribe `get_queryset` para filtrar automáticamente por el tenant actual. |
+| **`TenantModelForm`** | Form | Filtra todos los campos `ForeignKey` del formulario para mostrar solo opciones que pertenecen al mismo tenant. |
+| **`RoleFormMixin`** | Form Mixin | **Anti-Escalada:** Limita las opciones del campo `permissions` para que un usuario no pueda otorgar permisos que él mismo no tiene. |
+| **`AbstractTenantRole`** | Model | Modelo base para Roles. Incluye nombre, descripción y relación M2M con `Permission`. |
+| **`AbstractTenantMember`** | Model | Modelo base para Miembros. Vincula Usuario + Tenant (+ Rol en tu implementación concreta). |
+| **`has_tenant_perm`** | Template Tag | Permite verificar permisos booleanos dentro de templates HTML. |
 
-> **Ejemplo:** Si Alice no tiene permiso de "Borrar Facturas", el formulario de creación de roles no le mostrará esa opción para asignársela a otro usuario.
+---
 
-### 2. Aislamiento Estricto
-Todas las vistas heredan de `TenantGenericViewMixin`, el cual sobrescribe `get_queryset`.
+## ⚙️ Bajo el Capó: ¿Cómo funciona la seguridad?
 
-> **Resultado:** Es imposible acceder a un objeto `/roles/5/` si ese rol pertenece a otra empresa, incluso si adivinas el ID.
+Para generar confianza en la implementación, aquí explicamos los controles técnicos:
 
-### 3. Protección de Registros (`is_protected`)
-El sistema respeta el campo `is_protected` en los modelos.
+### 1. Inyección del Contexto (Middleware)
+Todo comienza en el middleware. Antes de llegar a la vista, el sistema debe identificar al "Tenant Actual".
+*   `request.tenant` se inyecta en cada petición.
+*   `django_multitenant.utils.set_current_tenant(tenant)` se llama para activar el filtrado a nivel de base de datos (si usas Citus/Postgres schemas) o lógico.
 
-*   **Uso:** El rol "Administrador" se crea con `is_protected=True`.
-*   **Resultado:** Si alguien intenta borrarlo vía Web o API, recibirá un error `403 Forbidden`.
+### 2. Aislamiento en Vistas (`get_queryset`)
+Nuestras vistas genéricas (`TenantListView`, etc.) sobrescriben `get_queryset`.
+*   **Código:** `return qs.filter(tenant_id=request.tenant.id)`
+*   **Efecto:** Incluso si un atacante cambia el ID en la URL (`/roles/999/`), la consulta SQL forzará el filtro `AND tenant_id = X`. Si el ID 999 no pertenece al tenant X, la base de datos devuelve vacío y Django lanza 404.
+
+### 3. Formularios Blindados ("Anti-Leak")
+Al crear o editar datos, el riesgo es ver información ajena en los "Select Box" (Claves Foráneas).
+*   `TenantModelForm` itera sobre todos los campos del formulario.
+*   Detecta si el modelo relacionado tiene `tenant_id`.
+*   Aplica automáticamente un filtro al QuerySet del widget: `.filter(tenant_id=request.tenant.id)`.
+
+### 4. Anti-Escalada de Privilegios
+Evita que un administrador malintencionado o comprometido cree un "Super Usuario" oculto.
+*   Al renderizar el formulario de Roles, `RoleFormMixin` intercepta el campo `permissions`.
+*   Calcula la intersección entre "Todos los permisos disponibles" y "Los permisos que TIENE el usuario actual".
+*   Solo muestra esa intersección. Nadie puede dar lo que no tiene.
 
 ---
 
@@ -179,7 +236,8 @@ Para verificar la seguridad:
 5.  Intenta entrar como **Charlie** (usuario de otra empresa) a `/1/roles/`. Recibirás un `403`.
 
 ---
-## 📚 References
+
+## 📚 Referencias
 
 - [django-multitenant](https://github.com/citusdata/django-multitenant)
 
